@@ -1,7 +1,7 @@
 """
 KHAN PAY – Ultra-Fast UPI Payment Verifier
 Complete error handling, safe Supabase/Gmail fallback, real polling.
-QR generated client-side using real UPI ID, scannable and reliable.
+QR generated server-side for reliability and scannability.
 """
 
 import os
@@ -622,6 +622,7 @@ def qr_image():
         order = db_get_order(order_id)
         if not order:
             return jsonify({'status': 'error', 'message': 'Order not found'}), 404
+        # Build UPI URI with only essential fields for better scanning
         upi_intent = f"upi://pay?pa={CONFIG['UPI_ID']}&pn=KHAN%20PAY&am={order['amount']}&cu=INR"
         if qrcode is None:
             return jsonify({'status': 'error', 'message': 'QR library not available'}), 500
@@ -699,7 +700,7 @@ def api_status():
         return jsonify({'error': 'Internal error'}), 500
 
 # ============================================
-# KHAN PAY PAYMENT HTML – Client-side QR with real UPI ID
+# KHAN PAY PAYMENT HTML – Server-generated QR with "I have paid" popup
 # ============================================
 PAYMENT_HTML = '''
 <!doctype html>
@@ -712,9 +713,8 @@ PAYMENT_HTML = '''
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
-    :root{--ink:#07162f;--blue:#0787f5;--cyan:#21b8ff;--green:#08c55b;--soft:#e8f6ff;--line:#cbe7fa;--white:#fff;--muted:#647792;--shadow:rgba(0,81,160,.14)}*{box-sizing:border-box}body{margin:0;color:var(--ink);font-family:Manrope,Arial,sans-serif;background-color:#f5f9ff;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:56px 56px}.page{min-height:100vh;padding:18px 14px 50px;overflow:hidden}.shell{position:relative;width:min(100%,500px);margin:auto;padding:24px;border:1.5px solid #61b9ff;border-radius:24px;background:rgba(229,245,255,.94);box-shadow:10px 12px 0 #32a9fa,0 28px 70px var(--shadow)}.brand{display:flex;align-items:center;gap:12px}.logo{display:grid;place-items:center;width:46px;height:46px;border-radius:13px;color:white;background:linear-gradient(135deg,var(--blue),var(--cyan));font-size:25px;font-weight:900;box-shadow:0 9px 22px rgba(0,133,245,.3)}.brand b{font-size:22px}.brand b em{color:var(--blue);font-style:normal}.brand small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase}.secure{margin-left:auto;color:var(--green);font-weight:800;font-size:12px}.amount{margin:30px 0 20px}.live{display:inline-flex;align-items:center;gap:7px;margin-bottom:10px;padding:6px 10px;border-radius:99px;color:var(--blue);background:#d9efff;font-size:10px;font-weight:800;text-transform:uppercase}.live i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(8,197,91,.12);animation:pulse 1.3s infinite}.amount p{margin:0 0 4px;color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase}.amount h1{margin:0;font-size:52px;line-height:1;font-weight:800}.amount h1 small{font-size:16px;color:var(--muted)}.card{padding:25px 20px 16px;text-align:center;border:1px solid #dbe8f2;border-radius:21px;background:white;box-shadow:0 15px 42px rgba(5,50,90,.08)}.qrbox{position:relative;width:min(100%,280px);aspect-ratio:1;margin:auto;padding:12px;overflow:hidden;border-radius:14px;background:white;box-shadow:0 0 0 1px #d9e6f0,0 0 42px rgba(7,135,245,.16);display:flex;align-items:center;justify-content:center}.qrbox #qrCanvas{display:block;width:100%;height:100%;}.scan{position:absolute;z-index:3;left:10px;right:10px;top:10px;height:2px;background:var(--blue);box-shadow:0 0 10px var(--blue);animation:scan 3s ease-in-out infinite}.hint{margin:18px 0 13px}.hint b{display:block;font-size:12px;text-transform:uppercase}.hint span{font-size:10px;color:var(--muted)}button{border:0;font:inherit;cursor:pointer}.save,.done,.verify-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:43px;padding:0 22px;border-radius:11px;font-weight:700}.save{color:#075aa8;background:#edf7ff;box-shadow:0 3px 8px rgba(4,70,130,.12)}.verify-btn{background:#08c55b;color:white;box-shadow:0 4px 14px rgba(8,197,91,.3);width:100%;margin-top:10px}.verify-btn:active{transform:scale(.96)}dl{margin:20px 0 0;text-align:left}dl div{display:grid;grid-template-columns:88px 1fr;gap:10px;padding:14px 0;border-top:1px solid #dce7ef;font-size:13px}dt{color:var(--muted);font-weight:600}dd{margin:0;text-align:right;font-weight:800;overflow-wrap:anywhere}.checking{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:99px;color:var(--blue);background:#dff1ff;white-space:nowrap}.checking i{width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 5px rgba(7,135,245,.12);animation:pulse 1.2s infinite}.note{text-align:center;color:var(--muted);font-size:10px}.modal{position:fixed;z-index:10;inset:0;display:none;place-items:center;padding:16px;background:rgba(2,13,26,.76);backdrop-filter:blur(7px)}.modal.open{display:grid}.popup{position:relative;width:min(100%,430px);padding:38px 32px 32px;overflow:hidden;text-align:center;border:1px solid #8ee6b5;border-radius:24px;background:#f4fbff;box-shadow:0 30px 100px rgba(0,0,0,.35);animation:pop .55s cubic-bezier(.2,.9,.3,1.2)}.popup:before{content:"";position:absolute;inset:0 0 auto;height:6px;background:linear-gradient(90deg,var(--blue),var(--green),var(--cyan))}.check{display:grid;place-items:center;width:105px;height:105px;margin:0 auto 24px;border-radius:50%;color:white;background:var(--green);font-size:55px;box-shadow:0 0 0 12px #d9f8e8,0 0 46px rgba(8,197,91,.45);animation:float 3s 1s infinite}.popup label{color:var(--blue);font-size:10px;font-weight:800;text-transform:uppercase}.popup h2{margin:8px 0;color:var(--green);font-size:27px}.popup>p{margin:0 0 20px;color:var(--muted);font-size:14px}.receipt{padding:8px 16px;margin-bottom:25px;border-radius:12px;background:#edf5fa}.receipt div{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #dbe7ef;font-size:11px;text-align:left}.receipt div:last-child{border:0}.receipt span{color:var(--muted)}.receipt b{overflow-wrap:anywhere;text-align:right}.paid{color:var(--green)}.done{width:100%;color:white;background:linear-gradient(90deg,var(--blue),var(--cyan));box-shadow:0 8px 20px rgba(7,135,245,.25)}@keyframes scan{0%,100%{transform:translateY(0);opacity:.15}50%{transform:translateY(200px);opacity:.9}}@keyframes pulse{50%{opacity:.35;transform:scale(.8)}}@keyframes pop{from{opacity:0;transform:scale(.6) rotate(-5deg)}to{opacity:1;transform:scale(1)}}@keyframes float{50%{transform:translateY(-6px)}}@media(max-width:430px){.shell{padding:18px;box-shadow:7px 8px 0 #32a9fa}.amount h1{font-size:46px}.card{padding:18px 16px}.qrbox{width:min(100%,220px)}.popup{padding:34px 22px 25px}}
+    :root{--ink:#07162f;--blue:#0787f5;--cyan:#21b8ff;--green:#08c55b;--soft:#e8f6ff;--line:#cbe7fa;--white:#fff;--muted:#647792;--shadow:rgba(0,81,160,.14)}*{box-sizing:border-box}body{margin:0;color:var(--ink);font-family:Manrope,Arial,sans-serif;background-color:#f5f9ff;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:56px 56px}.page{min-height:100vh;padding:18px 14px 50px;overflow:hidden}.shell{position:relative;width:min(100%,500px);margin:auto;padding:24px;border:1.5px solid #61b9ff;border-radius:24px;background:rgba(229,245,255,.94);box-shadow:10px 12px 0 #32a9fa,0 28px 70px var(--shadow)}.brand{display:flex;align-items:center;gap:12px}.logo{display:grid;place-items:center;width:46px;height:46px;border-radius:13px;color:white;background:linear-gradient(135deg,var(--blue),var(--cyan));font-size:25px;font-weight:900;box-shadow:0 9px 22px rgba(0,133,245,.3)}.brand b{font-size:22px}.brand b em{color:var(--blue);font-style:normal}.brand small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase}.secure{margin-left:auto;color:var(--green);font-weight:800;font-size:12px}.amount{margin:30px 0 20px}.live{display:inline-flex;align-items:center;gap:7px;margin-bottom:10px;padding:6px 10px;border-radius:99px;color:var(--blue);background:#d9efff;font-size:10px;font-weight:800;text-transform:uppercase}.live i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(8,197,91,.12);animation:pulse 1.3s infinite}.amount p{margin:0 0 4px;color:var(--muted);font-size:12px;font-weight:800;text-transform:uppercase}.amount h1{margin:0;font-size:52px;line-height:1;font-weight:800}.amount h1 small{font-size:16px;color:var(--muted)}.card{padding:25px 20px 16px;text-align:center;border:1px solid #dbe8f2;border-radius:21px;background:white;box-shadow:0 15px 42px rgba(5,50,90,.08)}.qrbox{position:relative;width:min(100%,280px);aspect-ratio:1;margin:auto;padding:12px;overflow:hidden;border-radius:14px;background:white;box-shadow:0 0 0 1px #d9e6f0,0 0 42px rgba(7,135,245,.16);display:flex;align-items:center;justify-content:center}.qrbox img{display:block;width:100%;height:100%;object-fit:contain;border-radius:6px}.scan{position:absolute;z-index:3;left:10px;right:10px;top:10px;height:2px;background:var(--blue);box-shadow:0 0 10px var(--blue);animation:scan 3s ease-in-out infinite}.hint{margin:18px 0 13px}.hint b{display:block;font-size:12px;text-transform:uppercase}.hint span{font-size:10px;color:var(--muted)}button{border:0;font:inherit;cursor:pointer}.save,.done,.verify-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:43px;padding:0 22px;border-radius:11px;font-weight:700}.save{color:#075aa8;background:#edf7ff;box-shadow:0 3px 8px rgba(4,70,130,.12)}.verify-btn{background:#08c55b;color:white;box-shadow:0 4px 14px rgba(8,197,91,.3);width:100%;margin-top:10px}.verify-btn:active{transform:scale(.96)}dl{margin:20px 0 0;text-align:left}dl div{display:grid;grid-template-columns:88px 1fr;gap:10px;padding:14px 0;border-top:1px solid #dce7ef;font-size:13px}dt{color:var(--muted);font-weight:600}dd{margin:0;text-align:right;font-weight:800;overflow-wrap:anywhere}.checking{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:99px;color:var(--blue);background:#dff1ff;white-space:nowrap}.checking i{width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 5px rgba(7,135,245,.12);animation:pulse 1.2s infinite}.note{text-align:center;color:var(--muted);font-size:10px}.modal{position:fixed;z-index:10;inset:0;display:none;place-items:center;padding:16px;background:rgba(2,13,26,.76);backdrop-filter:blur(7px)}.modal.open{display:grid}.popup{position:relative;width:min(100%,430px);padding:38px 32px 32px;overflow:hidden;text-align:center;border:1px solid #8ee6b5;border-radius:24px;background:#f4fbff;box-shadow:0 30px 100px rgba(0,0,0,.35);animation:pop .55s cubic-bezier(.2,.9,.3,1.2)}.popup:before{content:"";position:absolute;inset:0 0 auto;height:6px;background:linear-gradient(90deg,var(--blue),var(--green),var(--cyan))}.check{display:grid;place-items:center;width:105px;height:105px;margin:0 auto 24px;border-radius:50%;color:white;background:var(--green);font-size:55px;box-shadow:0 0 0 12px #d9f8e8,0 0 46px rgba(8,197,91,.45);animation:float 3s 1s infinite}.popup label{color:var(--blue);font-size:10px;font-weight:800;text-transform:uppercase}.popup h2{margin:8px 0;color:var(--green);font-size:27px}.popup>p{margin:0 0 20px;color:var(--muted);font-size:14px}.receipt{padding:8px 16px;margin-bottom:25px;border-radius:12px;background:#edf5fa}.receipt div{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #dbe7ef;font-size:11px;text-align:left}.receipt div:last-child{border:0}.receipt span{color:var(--muted)}.receipt b{overflow-wrap:anywhere;text-align:right}.paid{color:var(--green)}.done{width:100%;color:white;background:linear-gradient(90deg,var(--blue),var(--cyan));box-shadow:0 8px 20px rgba(7,135,245,.25)}.not-received .popup{border-color:#f6ad55}.not-received .popup:before{background:linear-gradient(90deg,var(--blue),#f6ad55,var(--cyan))}.not-received .check{background:#f6ad55;box-shadow:0 0 0 12px #fde8d0,0 0 46px rgba(246,173,85,.45)}.not-received h2{color:#f6ad55}@keyframes scan{0%,100%{transform:translateY(0);opacity:.15}50%{transform:translateY(200px);opacity:.9}}@keyframes pulse{50%{opacity:.35;transform:scale(.8)}}@keyframes pop{from{opacity:0;transform:scale(.6) rotate(-5deg)}to{opacity:1;transform:scale(1)}}@keyframes float{50%{transform:translateY(-6px)}}@media(max-width:430px){.shell{padding:18px;box-shadow:7px 8px 0 #32a9fa}.amount h1{font-size:46px}.card{padding:18px 16px}.qrbox{width:min(100%,220px)}.popup{padding:34px 22px 25px}}
   </style>
 </head>
 <body>
@@ -722,7 +722,7 @@ PAYMENT_HTML = '''
   <header class="brand"><div class="logo">Ҝ</div><div><b>KHAN <em>PAY</em></b><small>Secure checkout</small></div><span class="secure">✓ Secure</span></header>
   <div class="amount"><span class="live"><i></i>Live payment request</span><p>Order total</p><h1>₹<span id="amount">1.00</span> <small>INR</small></h1></div>
   <div class="card">
-    <div class="qrbox"><div class="scan"></div><div id="qrCanvas"></div></div>
+    <div class="qrbox"><div class="scan"></div><img id="qrImg" src="" alt="UPI QR Code"></div>
     <div class="hint"><b>Scan with any UPI app</b><span>Google Pay, PhonePe, Paytm or BHIM</span></div>
     <button class="save" id="save">⇩ Save QR</button>
     <button class="verify-btn" id="paidBtn">✅ I have paid</button>
@@ -730,23 +730,23 @@ PAYMENT_HTML = '''
   </div>
   <p class="note">✓ Protected with bank-grade security</p>
 </section></main>
+<!-- Success Modal -->
 <div class="modal" id="modal"><section class="popup" role="dialog" aria-modal="true"><div class="check">✓</div><label>Transaction complete</label><h2>Payment successful!</h2><p>Your payment of ₹<span id="paidAmount">1.00</span> has been received.</p><div class="receipt"><div><span>Paid to</span><b>KHAN PAY</b></div><div><span>Order ID</span><b id="paidOrder"></b></div><div><span>Status</span><b class="paid">✓ Payment received</b></div></div><button class="done" id="done">Done</button></section></div>
+<!-- Not Received Modal -->
+<div class="modal not-received" id="notReceivedModal"><section class="popup" role="dialog" aria-modal="true"><div class="check">⏳</div><label>Payment status</label><h2>Payment not received</h2><p>We haven't received your payment yet. Please check your UPI app and try again.</p><div class="receipt"><div><span>Order ID</span><b id="notReceivedOrder"></b></div><div><span>Status</span><b style="color:#f6ad55;">⏳ Pending</b></div></div><button class="done" id="notReceivedDone">Got It</button></section></div>
 <script>
   (function() {
     // Read URL parameters
     const q = new URLSearchParams(location.search);
-    // IMPORTANT: use the real UPI ID passed from the server; never fallback to fake
-    const upi = q.get('upi');
     const amount = q.get('amount') || '1.00';
-    const order = q.get('orderId') || 'PF-K6I078RN';
     const merchant = q.get('merchant') || 'KHAN PAY';
+    const order = q.get('orderId') || 'PF-K6I078RN';
     const statusParam = q.get('status') || 'pending';
 
     const data = {
       amount: amount,
       merchant: merchant,
       order: order,
-      upi: upi, // will be used for QR generation
       status: statusParam
     };
     const $ = id => document.getElementById(id);
@@ -755,31 +755,34 @@ PAYMENT_HTML = '''
     $('order').textContent = data.order;
     $('paidAmount').textContent = data.amount;
     $('paidOrder').textContent = data.order;
+    $('notReceivedOrder').textContent = data.order;
 
-    // Generate QR client-side using the real UPI ID
-    const qrContainer = document.getElementById('qrCanvas');
-    if (data.upi && data.upi.trim() !== '') {
-      // Build UPI URI with only essential parameters: pa, pn, am, cu
-      // Do NOT include tr or other optional params to keep QR simple and scannable
-      const upiIntent = 'upi://pay?pa=' + encodeURIComponent(data.upi) +
-                        '&pn=' + encodeURIComponent('KHAN PAY') +
-                        '&am=' + encodeURIComponent(data.amount) +
-                        '&cu=INR';
-      // Clear previous content
-      qrContainer.innerHTML = '';
-      // Create QR with higher resolution and M error correction for better scanning
-      new QRCode(qrContainer, {
-        text: upiIntent,
-        width: 300,        // Increased size for better scan
-        height: 300,
-        colorDark: '#000000',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M  // Medium error correction for better readability
-      });
-    } else {
-      // If UPI ID is missing, show a fallback message (should not happen in normal flow)
-      qrContainer.innerHTML = '<p style="color:red;font-size:14px;">UPI ID missing</p>';
-    }
+    // Set QR image from server (reliable)
+    const qrImg = document.getElementById('qrImg');
+    qrImg.src = '/api/qr-image.php?order_id=' + encodeURIComponent(data.order);
+    // Add fallback: if image fails to load, try client-side generation
+    qrImg.onerror = function() {
+      // Attempt client-side generation using QRCode.js (if available)
+      if (typeof QRCode !== 'undefined') {
+        const upi = q.get('upi') || '';
+        if (upi && upi.trim() !== '') {
+          const upiIntent = 'upi://pay?pa=' + encodeURIComponent(upi) +
+                            '&pn=' + encodeURIComponent('KHAN PAY') +
+                            '&am=' + encodeURIComponent(data.amount) +
+                            '&cu=INR';
+          const container = this.parentNode;
+          container.innerHTML = '';
+          new QRCode(container, {
+            text: upiIntent,
+            width: 280,
+            height: 280,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        }
+      }
+    };
 
     // Timer (expires in ~5 minutes)
     let left = 262;
@@ -788,33 +791,35 @@ PAYMENT_HTML = '''
       $('timer').textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
     }, 1000);
 
-    // Save QR – download the canvas
+    // Save QR – download the image
     $('save').onclick = function() {
-      const canvas = qrContainer.querySelector('canvas');
-      if (canvas) {
-        const a = document.createElement('a');
-        a.download = data.order + '-qr.png';
-        a.href = canvas.toDataURL('image/png');
-        a.click();
+      const img = document.getElementById('qrImg');
+      if (img.src && img.src.startsWith('http')) {
+        // Download via fetch
+        fetch(img.src)
+          .then(res => res.blob())
+          .then(blob => {
+            const a = document.createElement('a');
+            a.download = data.order + '-qr.png';
+            a.href = URL.createObjectURL(blob);
+            a.click();
+            URL.revokeObjectURL(a.href);
+          })
+          .catch(() => {
+            // fallback: open in new tab
+            window.open(img.src, '_blank');
+          });
       } else {
-        alert('QR not ready');
+        // try canvas
+        const canvas = img.parentNode.querySelector('canvas');
+        if (canvas) {
+          const a = document.createElement('a');
+          a.download = data.order + '-qr.png';
+          a.href = canvas.toDataURL('image/png');
+          a.click();
+        }
       }
     };
-
-    // "I have paid" button – trigger immediate status check
-    const paidBtn = document.getElementById('paidBtn');
-    paidBtn.addEventListener('click', function() {
-      // Show loading state
-      this.textContent = '⏳ Checking...';
-      this.disabled = true;
-      // Trigger a status check
-      checkStatus(true); // force check (bypass cache)
-      // Re-enable after a short delay
-      setTimeout(function() {
-        paidBtn.textContent = '✅ I have paid';
-        paidBtn.disabled = false;
-      }, 3000);
-    });
 
     // Success modal
     const modal = document.getElementById('modal');
@@ -822,11 +827,18 @@ PAYMENT_HTML = '''
     const hideSuccess = function() { modal.classList.remove('open'); };
     document.getElementById('done').onclick = hideSuccess;
 
+    // Not Received modal
+    const notReceivedModal = document.getElementById('notReceivedModal');
+    const showNotReceived = function() { notReceivedModal.classList.add('open'); };
+    const hideNotReceived = function() { notReceivedModal.classList.remove('open'); };
+    document.getElementById('notReceivedDone').onclick = hideNotReceived;
+
     // ---- AUTO POLLING (real verification) ----
     const statusBadge = document.getElementById('statusBadge');
     const statusLabel = statusBadge;
     let isSuccessShown = false;
     let checkInterval;
+    let lastCheckMessage = '';
 
     function checkStatus(bypassCache) {
       if (isSuccessShown) return;
@@ -854,13 +866,35 @@ PAYMENT_HTML = '''
             clearInterval(checkInterval);
             return;
           }
-          // Still pending
-          statusLabel.innerHTML = '⏳ Waiting for payment…';
-          statusLabel.style.background = '#dff1ff';
-          statusLabel.style.color = '#0787f5';
+          // Still pending – show "not received" popup if this was a manual check
+          if (bypassCache) {
+            showNotReceived();
+            statusLabel.innerHTML = '⏳ Payment not received yet';
+            statusLabel.style.background = '#fff3cd';
+            statusLabel.style.color = '#856404';
+          } else {
+            statusLabel.innerHTML = '⏳ Waiting for payment…';
+            statusLabel.style.background = '#dff1ff';
+            statusLabel.style.color = '#0787f5';
+          }
         })
         .catch(function(err) { console.warn('Poll error:', err); });
     }
+
+    // "I have paid" button – trigger immediate status check with popup on failure
+    const paidBtn = document.getElementById('paidBtn');
+    paidBtn.addEventListener('click', function() {
+      // Show loading state
+      this.textContent = '⏳ Checking...';
+      this.disabled = true;
+      // Trigger a status check
+      checkStatus(true); // force check (bypass cache)
+      // Re-enable after a short delay (popup will already be shown)
+      setTimeout(function() {
+        paidBtn.textContent = '✅ I have paid';
+        paidBtn.disabled = false;
+      }, 3000);
+    });
 
     // If status is already 'verified', show success immediately
     if (data.status === 'verified') {
@@ -892,7 +926,7 @@ def pay_page():
         if not order:
             return "Order not found", 404
 
-        # Always pass the real UPI ID from CONFIG
+        # Always pass the real UPI ID from CONFIG (for fallback client-side QR)
         amount = order['amount']
         merchant = CONFIG['PAYEE_NAME']
         upi = CONFIG['UPI_ID']
