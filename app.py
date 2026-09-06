@@ -739,7 +739,7 @@ PAYMENT_HTML = '''
     <div class="qrbox"><div class="scan"></div><img id="qrImg" src="" alt="UPI QR Code"></div>
     <div class="hint"><b>Scan with any UPI app</b><span>Google Pay, PhonePe, Paytm or BHIM</span></div>
     <button class="save" id="save">⇩ Save QR</button>
-    <button class="verify-btn" id="paidBtn">✅ I have paid</button>
+    <button class="verify-btn" id=
     <dl><div><dt>Merchant</dt><dd id="merchant">KHAN PAY</dd></div><div><dt>Order ID</dt><dd id="order">PF-K6I078RN</dd></div><div><dt>Expires in</dt><dd id="timer">04:22</dd></div><div><dt>Verification</dt><dd><span class="checking" id="statusBadge"><i></i>Waiting for payment...</span></dd></div></dl>
   </div>
   <p class="note">✓ Protected with bank-grade security</p>
