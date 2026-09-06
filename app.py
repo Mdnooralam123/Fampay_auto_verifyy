@@ -767,14 +767,14 @@ PAYMENT_HTML = '''
                         '&cu=INR';
       // Clear previous content
       qrContainer.innerHTML = '';
-      // Create QR
+      // Create QR with higher resolution and M error correction for better scanning
       new QRCode(qrContainer, {
         text: upiIntent,
-        width: 280,
-        height: 280,
-        colorDark: '#07162f',
+        width: 300,        // Increased size for better scan
+        height: 300,
+        colorDark: '#000000',
         colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.H
+        correctLevel: QRCode.CorrectLevel.M  // Medium error correction for better readability
       });
     } else {
       // If UPI ID is missing, show a fallback message (should not happen in normal flow)
