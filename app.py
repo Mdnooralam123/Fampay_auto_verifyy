@@ -615,6 +615,10 @@ def api_verify_order():
 
 @app.route('/api/qr-image.php', methods=['GET'])
 def qr_image():
+    """
+    Generate QR code for an order.
+    Uses server-side qrcode library for reliable generation on Vercel.
+    """
     try:
         order_id = request.args.get('order_id')
         if not order_id:
@@ -622,14 +626,24 @@ def qr_image():
         order = db_get_order(order_id)
         if not order:
             return jsonify({'status': 'error', 'message': 'Order not found'}), 404
-        # Build UPI URI with only essential fields for better scanning
+
+        # Build the UPI URI with essential fields for scannability
         upi_intent = f"upi://pay?pa={CONFIG['UPI_ID']}&pn=KHAN%20PAY&am={order['amount']}&cu=INR"
         if qrcode is None:
             return jsonify({'status': 'error', 'message': 'QR library not available'}), 500
-        qr = qrcode.QRCode(box_size=12, border=6)
+
+        # Create QR with high error correction and proper size
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=12,
+            border=6,
+        )
         qr.add_data(upi_intent)
         qr.make(fit=True)
         img = qr.make_image(fill_color="#000000", back_color="#FFFFFF")
+
+        # Return as PNG
         img_io = BytesIO()
         img.save(img_io, 'PNG')
         img_io.seek(0)
