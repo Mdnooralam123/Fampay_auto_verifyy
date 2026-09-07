@@ -1,6 +1,6 @@
 """
 KHAN PAY – Ultra-Fast UPI Payment Verifier
-Complete error handling, safe Supabase/Gmail fallback, real polling.
+Complete error handling, safe Supabase/Gmail fallback, real polling (2s).
 QR generated server-side for reliability and scannability.
 """
 
@@ -217,7 +217,6 @@ def db_validate_api_key(api_key):
             result = supabase_client.table('api_keys').select('*').eq('api_key', api_key).eq('is_active', 1).execute()
             if result.data:
                 key = result.data[0]
-                # Parse expires_at to datetime object for reliable comparison
                 expires_at = datetime.fromisoformat(key['expires_at'])
                 if datetime.now(timezone.utc) < expires_at:
                     return key
@@ -232,7 +231,6 @@ def db_validate_api_key(api_key):
             if datetime.now(timezone.utc) < expires_at:
                 return key
         except:
-            # If parsing fails, assume expired for safety
             return None
     return None
 
@@ -459,7 +457,6 @@ def apikey_generate():
             try: expiry_hours = int(days) * 24
             except: pass
         api_key = db_create_api_key(name, expiry_hours)
-        # Compute expiry times for display
         now_utc = datetime.now(timezone.utc)
         expiry_utc = now_utc + timedelta(hours=expiry_hours)
         expiry_ist = expiry_utc.astimezone(IST)
@@ -467,9 +464,9 @@ def apikey_generate():
             'status': 'success',
             'api_key': api_key,
             'name': name,
-            'expires_at': expiry_utc.isoformat(),          # UTC ISO
-            'expires_at_ist': format_ist(expiry_ist),       # Human-readable IST
-            'expires_in_hours': expiry_hours                # Total hours
+            'expires_at': expiry_utc.isoformat(),
+            'expires_at_ist': format_ist(expiry_ist),
+            'expires_in_hours': expiry_hours
         })
     except Exception as e:
         logger.error(f"apikey_generate error: {e}")
@@ -634,10 +631,6 @@ def api_verify_order():
 
 @app.route('/api/qr-image.php', methods=['GET'])
 def qr_image():
-    """
-    Generate QR code for an order.
-    Uses server-side qrcode library for reliable generation on Vercel.
-    """
     try:
         order_id = request.args.get('order_id')
         if not order_id:
@@ -646,12 +639,10 @@ def qr_image():
         if not order:
             return jsonify({'status': 'error', 'message': 'Order not found'}), 404
 
-        # Build the UPI URI with essential fields for scannability
         upi_intent = f"upi://pay?pa={CONFIG['UPI_ID']}&pn=KHAN%20PAY&am={order['amount']}&cu=INR"
         if qrcode is None:
             return jsonify({'status': 'error', 'message': 'QR library not available'}), 500
 
-        # Create QR with high error correction and proper size
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_H,
@@ -662,7 +653,6 @@ def qr_image():
         qr.make(fit=True)
         img = qr.make_image(fill_color="#000000", back_color="#FFFFFF")
 
-        # Return as PNG
         img_io = BytesIO()
         img.save(img_io, 'PNG')
         img_io.seek(0)
@@ -672,7 +662,7 @@ def qr_image():
         return jsonify({'status': 'error', 'message': 'Failed to generate QR'}), 500
 
 # ============================================
-# CACHED STATUS ENDPOINT (ultra-fast polling)
+# CACHED STATUS ENDPOINT (2s cache TTL for fast repeated checks)
 # ============================================
 status_cache = {}
 CACHE_TTL = 2  # seconds
@@ -733,7 +723,7 @@ def api_status():
         return jsonify({'error': 'Internal error'}), 500
 
 # ============================================
-# KHAN PAY PAYMENT HTML – Removed "I have paid" button, only auto-polling
+# KHAN PAY PAYMENT HTML – Auto-polling every 2 seconds
 # ============================================
 PAYMENT_HTML = '''
 <!doctype html>
@@ -766,7 +756,6 @@ PAYMENT_HTML = '''
 <div class="modal" id="modal"><section class="popup" role="dialog" aria-modal="true"><div class="check">✓</div><label>Transaction complete</label><h2>Payment successful!</h2><p>Your payment of ₹<span id="paidAmount">1.00</span> has been received.</p><div class="receipt"><div><span>Paid to</span><b>KHAN PAY</b></div><div><span>Order ID</span><b id="paidOrder"></b></div><div><span>Status</span><b class="paid">✓ Payment received</b></div></div><button class="done" id="done">Done</button></section></div>
 <script>
   (function() {
-    // Read URL parameters
     const q = new URLSearchParams(location.search);
     const amount = q.get('amount') || '1.00';
     const merchant = q.get('merchant') || 'KHAN PAY';
@@ -786,12 +775,9 @@ PAYMENT_HTML = '''
     $('paidAmount').textContent = data.amount;
     $('paidOrder').textContent = data.order;
 
-    // Set QR image from server (reliable)
     const qrImg = document.getElementById('qrImg');
     qrImg.src = '/api/qr-image.php?order_id=' + encodeURIComponent(data.order);
-    // Add fallback: if image fails to load, try client-side generation
     qrImg.onerror = function() {
-      // Attempt client-side generation using QRCode.js (if available)
       if (typeof QRCode !== 'undefined') {
         const upi = q.get('upi') || '';
         if (upi && upi.trim() !== '') {
@@ -813,18 +799,15 @@ PAYMENT_HTML = '''
       }
     };
 
-    // Timer (expires in ~5 minutes)
     let left = 262;
     setInterval(function() {
       left = Math.max(0, left - 1);
       $('timer').textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
     }, 1000);
 
-    // Save QR – download the image
     $('save').onclick = function() {
       const img = document.getElementById('qrImg');
       if (img.src && img.src.startsWith('http')) {
-        // Download via fetch
         fetch(img.src)
           .then(res => res.blob())
           .then(blob => {
@@ -835,11 +818,9 @@ PAYMENT_HTML = '''
             URL.revokeObjectURL(a.href);
           })
           .catch(() => {
-            // fallback: open in new tab
             window.open(img.src, '_blank');
           });
       } else {
-        // try canvas
         const canvas = img.parentNode.querySelector('canvas');
         if (canvas) {
           const a = document.createElement('a');
@@ -850,13 +831,11 @@ PAYMENT_HTML = '''
       }
     };
 
-    // Success modal
     const modal = document.getElementById('modal');
     const showSuccess = function() { modal.classList.add('open'); };
     const hideSuccess = function() { modal.classList.remove('open'); };
     document.getElementById('done').onclick = hideSuccess;
 
-    // ---- AUTO POLLING (real verification) ----
     const statusBadge = document.getElementById('statusBadge');
     const statusLabel = statusBadge;
     let isSuccessShown = false;
@@ -888,7 +867,6 @@ PAYMENT_HTML = '''
             clearInterval(checkInterval);
             return;
           }
-          // Still pending
           statusLabel.innerHTML = '⏳ Waiting for payment…';
           statusLabel.style.background = '#dff1ff';
           statusLabel.style.color = '#0787f5';
@@ -896,7 +874,6 @@ PAYMENT_HTML = '''
         .catch(function(err) { console.warn('Poll error:', err); });
     }
 
-    // If status is already 'verified', show success immediately
     if (data.status === 'verified') {
       isSuccessShown = true;
       showSuccess();
@@ -904,9 +881,8 @@ PAYMENT_HTML = '''
       statusLabel.style.background = '#d4edda';
       statusLabel.style.color = '#155724';
     } else {
-      // Poll every 1 second
       checkStatus();
-      checkInterval = setInterval(checkStatus, 1000);
+      checkInterval = setInterval(checkStatus, 2000);
     }
   })();
 </script>
@@ -926,7 +902,6 @@ def pay_page():
         if not order:
             return "Order not found", 404
 
-        # Always pass the real UPI ID from CONFIG (for fallback client-side QR)
         amount = order['amount']
         merchant = CONFIG['PAYEE_NAME']
         upi = CONFIG['UPI_ID']
@@ -1098,7 +1073,7 @@ def index():
     return jsonify({
         'name': 'KHAN PAY Payment Verifier',
         'version': '5.0.0',
-        'description': 'Premium UI with real auto‑verification (1s polling).',
+        'description': 'Premium UI with real auto‑verification (2s polling).',
         'endpoints': {
             'public': {
                 '/': 'GET - Documentation',
