@@ -45,7 +45,7 @@ CONFIG = {
     'GMAIL_APP_PASSWORD': os.getenv('GMAIL_APP_PASSWORD', 'owjwtlotkfjnsftm'),
     'GMAIL_EMAIL': os.getenv('GMAIL_EMAIL', 'nkg166465@gmail.com'),
     'TIME_WINDOW_MINUTES': int(os.getenv('TIME_WINDOW_MINUTES', 5)),
-    'ADMIN_API_KEY': os.getenv('ADMIN_API_KEY', 'khanbro786'),
+    'ADMIN_API_KEY': os.getenv('ADMIN_API_KEY', 'admin_1234567890'),
     'MAX_EMAILS_CHECK': int(os.getenv('MAX_EMAILS_CHECK', 50)),
     'SUPABASE_URL': os.getenv('SUPABASE_URL'),
     'SUPABASE_KEY': os.getenv('SUPABASE_KEY'),
@@ -208,19 +208,32 @@ def db_create_api_key(name, expiry_hours=24):
     return api_key
 
 def db_validate_api_key(api_key):
+    """
+    Validate API key: check existence, active status, and expiry.
+    Uses proper datetime comparison to avoid timezone/string issues.
+    """
     if supabase_client:
         try:
             result = supabase_client.table('api_keys').select('*').eq('api_key', api_key).eq('is_active', 1).execute()
             if result.data:
                 key = result.data[0]
-                if datetime.now(timezone.utc).isoformat() < key['expires_at']:
+                # Parse expires_at to datetime object for reliable comparison
+                expires_at = datetime.fromisoformat(key['expires_at'])
+                if datetime.now(timezone.utc) < expires_at:
                     return key
             return None
         except Exception as e:
             logger.error(f"Supabase validate error: {e}")
+    # Fallback storage
     key = app.fallback_api_keys.get(api_key)
-    if key and key['is_active'] == 1 and datetime.now(timezone.utc).isoformat() < key['expires_at']:
-        return key
+    if key and key['is_active'] == 1:
+        try:
+            expires_at = datetime.fromisoformat(key['expires_at'])
+            if datetime.now(timezone.utc) < expires_at:
+                return key
+        except:
+            # If parsing fails, assume expired for safety
+            return None
     return None
 
 def db_is_utr_verified(utr):
@@ -446,11 +459,17 @@ def apikey_generate():
             try: expiry_hours = int(days) * 24
             except: pass
         api_key = db_create_api_key(name, expiry_hours)
+        # Compute expiry times for display
+        now_utc = datetime.now(timezone.utc)
+        expiry_utc = now_utc + timedelta(hours=expiry_hours)
+        expiry_ist = expiry_utc.astimezone(IST)
         return jsonify({
             'status': 'success',
             'api_key': api_key,
             'name': name,
-            'expires_at': (datetime.now(timezone.utc) + timedelta(hours=expiry_hours)).isoformat()
+            'expires_at': expiry_utc.isoformat(),          # UTC ISO
+            'expires_at_ist': format_ist(expiry_ist),       # Human-readable IST
+            'expires_in_hours': expiry_hours                # Total hours
         })
     except Exception as e:
         logger.error(f"apikey_generate error: {e}")
