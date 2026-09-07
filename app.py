@@ -537,32 +537,33 @@ def admin_verify():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # ============================================
-# PUBLIC API
+# PUBLIC API – NO API KEY REQUIRED
 # ============================================
 @app.route('/api/qr.php', methods=['GET'])
 def api_qr():
     try:
-        api_key = request.args.get('api_key')
+        # Removed API key validation – anyone can create an order with just amount
         amount = request.args.get('amount')
-        if not api_key or not amount:
-            return jsonify({'status': 'error', 'message': 'api_key and amount required'}), 400
-        key_info = db_validate_api_key(api_key)
-        if not key_info:
-            return jsonify({'status': 'error', 'message': 'Invalid or expired API key'}), 401
+        if not amount:
+            return jsonify({'status': 'error', 'message': 'amount required'}), 400
         try:
             amount = float(amount)
             if amount <= 0:
                 raise ValueError
         except:
             return jsonify({'status': 'error', 'message': 'Invalid amount'}), 400
-        order_id = db_create_order(api_key, amount)
+
+        # Create order with a dummy API key (or empty) – we don't store it
+        order_id = db_create_order('public', amount)
         order = db_get_order(order_id)
         if not order:
             return jsonify({'status': 'error', 'message': 'Failed to create order'}), 500
+
         upi_intent = f"upi://pay?pa={CONFIG['UPI_ID']}&pn=KHAN%20PAY&tr={order_id}&am={amount}&cu=INR"
         base_url = request.url_root.rstrip('/')
         qr_url = f"{base_url}/api/qr-image.php?order_id={order_id}"
         checkout_url = f"{base_url}/pay.php?order_id={order_id}"
+
         return jsonify({
             'status': 'success',
             'data': {
@@ -584,12 +585,11 @@ def api_qr():
 @app.route('/api/verify-order.php', methods=['GET'])
 def api_verify_order():
     try:
-        api_key = request.args.get('api_key')
+        # Removed API key validation – only order_id required
         order_id = request.args.get('order_id')
-        if not api_key or not order_id:
-            return jsonify({'status': 'error', 'message': 'api_key and order_id required'}), 400
-        if not db_validate_api_key(api_key):
-            return jsonify({'status': 'error', 'message': 'Invalid API key'}), 401
+        if not order_id:
+            return jsonify({'status': 'error', 'message': 'order_id required'}), 400
+
         order = db_get_order(order_id)
         if not order:
             return jsonify({'status': 'error', 'message': 'Order not found'}), 404
@@ -1073,7 +1073,7 @@ def index():
     return jsonify({
         'name': 'KHAN PAY Payment Verifier',
         'version': '5.0.0',
-        'description': 'Premium UI with real auto‑verification (2s polling).',
+        'description': 'Premium UI with real auto‑verification (2s polling). No API key required for QR creation or verification.',
         'endpoints': {
             'public': {
                 '/': 'GET - Documentation',
@@ -1083,17 +1083,17 @@ def index():
                 '/verify-by-utr': 'GET/POST - Verify by UTR only',
                 '/verify-last-payment': 'GET - One-shot check by amount',
                 '/verify-payment': 'GET/POST - Legacy polling',
-                '/api/qr.php': 'GET - Create order and get QR (api_key, amount)',
-                '/api/verify-order.php': 'GET - Check order status (api_key, order_id)',
+                '/api/qr.php': 'GET - Create order and get QR (only amount required)',
+                '/api/verify-order.php': 'GET - Check order status (order_id required)',
                 '/api/qr-image.php': 'GET - Get colored QR image (order_id)',
                 '/pay.php': 'GET - Payment page (order_id)',
                 '/debug-emails': 'GET - Debug'
             }
         },
         'examples': {
-            'create_order': f'curl "{base_url}/api/qr.php?api_key=fam_YOUR_KEY&amount=499"',
-            'verify_by_amount': f'curl "{base_url}/verify-fast?amount=1"',
-            'payment_page': f'Open in browser: {base_url}/pay.php?order_id=Khan_YOUR_ID'
+            'create_order': f'curl "{base_url}/api/qr.php?amount=499"',
+            'verify_order': f'curl "{base_url}/api/verify-order.php?order_id=Khan_XXXX"',
+            'payment_page': f'Open in browser: {base_url}/pay.php?order_id=Khan_XXXX'
         }
     })
 
